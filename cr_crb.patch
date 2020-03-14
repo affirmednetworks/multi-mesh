@@ -1,0 +1,76 @@
+--- clusterrole_and_binding_clean.yaml	2020-03-13 12:25:02.000000000 -0400
++++ clusterrole_and_binding.yaml	2020-03-13 12:23:55.000000000 -0400
+@@ -56,7 +56,7 @@
+ apiVersion: rbac.authorization.k8s.io/v1
+ kind: ClusterRole
+ metadata:
+-  name: kiali
++  name: kiali-affirmed
+   labels:
+     app: kiali
+     chart: kiali
+@@ -125,7 +125,7 @@
+ apiVersion: rbac.authorization.k8s.io/v1
+ kind: ClusterRole
+ metadata:
+-  name: kiali-viewer
++  name: kiali-viewer-affirmed
+   labels:
+     app: kiali
+     chart: kiali
+@@ -333,7 +333,7 @@
+ kind: ClusterRole
+ apiVersion: rbac.authorization.k8s.io/v1
+ metadata:
+-  name: istio-reader
++  name: istio-reader-affirmed
+ rules:
+   - apiGroups: ['']
+     resources: ['nodes', 'pods', 'services', 'endpoints', "replicationcontrollers"]
+@@ -377,7 +377,7 @@
+ roleRef:
+   apiGroup: rbac.authorization.k8s.io
+   kind: ClusterRole
+-  name: kiali
++  name: kiali-affirmed
+ subjects:
+ - kind: ServiceAccount
+   name: kiali-service-account
+@@ -490,13 +490,13 @@
+ apiVersion: rbac.authorization.k8s.io/v1
+ kind: ClusterRoleBinding
+ metadata:
+-  name: istio-multi
++  name: istio-multi-affirmed
+   labels:
+     chart: istio-1.5.0
+ roleRef:
+   apiGroup: rbac.authorization.k8s.io
+   kind: ClusterRole
+-  name: istio-reader
++  name: istio-reader-affirmed
+ subjects:
+ - kind: ServiceAccount
+   name: istio-multi
+@@ -505,14 +505,16 @@
+ apiVersion: rbac.authorization.k8s.io/v1
+ kind: ClusterRoleBinding
+ metadata:
+-  name: istio-reader
++  name: istio-reader-affirmed
+   labels:
+     chart: istio-1.5.0
+ roleRef:
+   apiGroup: rbac.authorization.k8s.io
+   kind: ClusterRole
+-  name: istio-reader
++  name: istio-reader-affirmed
+ subjects:
+ - kind: ServiceAccount
+   name: istio-reader
+-  namespace: <your-namespace>
+\ No newline at end of file
++  namespace: <your-namespace>
++
++---
+\ No newline at end of file

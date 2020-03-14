@@ -1,0 +1,26 @@
+--- nodeport_svc_clean.yaml	2020-03-13 12:47:02.000000000 -0400
++++ nodeport_svc_affirmed.yaml	2020-03-13 12:47:03.000000000 -0400
+@@ -4,20 +4,20 @@
+ apiVersion: v1
+ kind: Service
+ metadata:
+-  name: istio-ingressgateway
++  name: <your-namespace>-ingressgateway
+   namespace: <your-namespace>
+   annotations:
+   labels:
+     chart: gateways
+     heritage: Tiller
+     release: istio
+-    app: istio-ingressgateway
++    app: <your-namespace>-ingressgateway
+     istio: ingressgateway
+ spec:
+   type: LoadBalancer
+   selector:
+     release: istio
+-    app: istio-ingressgateway
++    app: <your-namespace>-ingressgateway
+     istio: ingressgateway
+   ports:
+     -

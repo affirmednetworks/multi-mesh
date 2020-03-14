@@ -1,0 +1,257 @@
+---
+# Source: istio/charts/sidecarInjectorWebhook/templates/mutatingwebhook.yaml
+
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: <your-namespace>-sidecar-injector
+  labels:
+    app: sidecarInjectorWebhook
+    chart: sidecarInjectorWebhook
+    heritage: Tiller
+    release: istio
+webhooks:
+  - name: affirmed-sidecar-injector.istio.io
+    clientConfig:
+      service:
+        name: istio-sidecar-injector
+        namespace: <your-namespace>
+        path: "/inject"
+      caBundle: ""
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    failurePolicy: Fail
+    namespaceSelector:
+      matchLabels:
+        istio-injection: enabled-affirmed
+
+---
+# Source: istio/charts/galley/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-galley-configuration
+  namespace: <your-namespace>
+  labels:
+    app: galley
+    chart: galley
+    heritage: Tiller
+    release: istio
+    istio: galley
+data:
+  validatingwebhookconfiguration.yaml: |-    
+    apiVersion: admissionregistration.k8s.io/v1beta1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      name: <your-namespace>-galley
+      labels:
+        app: galley
+        chart: galley
+        heritage: Tiller
+        release: istio
+        istio: galley
+    webhooks:
+      - name: affirmed-pilot.validation.istio.io
+        clientConfig:
+          service:
+            name: istio-galley
+            namespace: <your-namespace>
+            path: "/admitpilot"
+          caBundle: ""
+        rules:
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - config.istio.io
+            apiVersions:
+            - v1alpha2
+            resources:
+            - httpapispecs
+            - httpapispecbindings
+            - quotaspecs
+            - quotaspecbindings
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - rbac.istio.io
+            apiVersions:
+            - "*"
+            resources:
+            - "*"
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - security.istio.io
+            apiVersions:
+            - "*"
+            resources:
+            - "*"
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - authentication.istio.io
+            apiVersions:
+            - "*"
+            resources:
+            - "*"
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - networking.istio.io
+            apiVersions:
+            - "*"
+            resources:
+            - destinationrules
+            - envoyfilters
+            - gateways
+            - serviceentries
+            - sidecars
+            - virtualservices
+        # Fail open until the validation webhook is ready. The webhook controller
+        # will update this to `Fail` and patch in the `caBundle` when the webhook
+        # endpoint is ready.
+        failurePolicy: Ignore
+        sideEffects: None
+      - name: affirmed-mixer.validation.istio.io
+        clientConfig:
+          service:
+            name: istio-galley
+            namespace: <your-namespace>
+            path: "/admitmixer"
+          caBundle: ""
+        rules:
+          - operations:
+            - CREATE
+            - UPDATE
+            apiGroups:
+            - config.istio.io
+            apiVersions:
+            - v1alpha2
+            resources:
+            - rules
+            - attributemanifests
+            - adapters
+            - handlers
+            - instances
+            - templates
+        # Fail open until the validation webhook is ready. The webhook controller
+        # will update this to `Fail` and patch in the `caBundle` when the webhook
+        # endpoint is ready.
+        failurePolicy: Ignore
+        sideEffects: None
+
+---
+# Source: istio/charts/galley/templates/validatingwebhookconfiguration.yaml
+
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: <your-namespace>-galley
+  labels:
+    app: galley
+    chart: galley
+    heritage: Tiller
+    release: istio
+    istio: galley
+webhooks:
+  - name: affirmed-pilot.validation.istio.io
+    clientConfig:
+      service:
+        name: istio-galley
+        namespace: <your-namespace>
+        path: "/admitpilot"
+      caBundle: ""
+    rules:
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - config.istio.io
+        apiVersions:
+        - v1alpha2
+        resources:
+        - httpapispecs
+        - httpapispecbindings
+        - quotaspecs
+        - quotaspecbindings
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - rbac.istio.io
+        apiVersions:
+        - "*"
+        resources:
+        - "*"
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - security.istio.io
+        apiVersions:
+        - "*"
+        resources:
+        - "*"
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - authentication.istio.io
+        apiVersions:
+        - "*"
+        resources:
+        - "*"
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - networking.istio.io
+        apiVersions:
+        - "*"
+        resources:
+        - destinationrules
+        - envoyfilters
+        - gateways
+        - serviceentries
+        - sidecars
+        - virtualservices
+    # Fail open until the validation webhook is ready. The webhook controller
+    # will update this to `Fail` and patch in the `caBundle` when the webhook
+    # endpoint is ready.
+    failurePolicy: Ignore
+    sideEffects: None
+  - name: affirmed-mixer.validation.istio.io
+    clientConfig:
+      service:
+        name: istio-galley
+        namespace: <your-namespace>
+        path: "/admitmixer"
+      caBundle: ""
+    rules:
+      - operations:
+        - CREATE
+        - UPDATE
+        apiGroups:
+        - config.istio.io
+        apiVersions:
+        - v1alpha2
+        resources:
+        - rules
+        - attributemanifests
+        - adapters
+        - handlers
+        - instances
+        - templates
+    # Fail open until the validation webhook is ready. The webhook controller
+    # will update this to `Fail` and patch in the `caBundle` when the webhook
+    # endpoint is ready.
+    failurePolicy: Ignore
+    sideEffects: None
