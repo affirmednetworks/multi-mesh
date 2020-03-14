@@ -1,6 +1,4 @@
-# Deploying and Operating
-
-Operating Multiple Disparate Istio Meshes on a Single Kubernetes Cluster
+# Deploying and Operating Multiple Disparate Istio Meshes on a Single Kubernetes Cluster
 
 ## Introduction
 
