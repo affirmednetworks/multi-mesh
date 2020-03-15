@@ -2,19 +2,21 @@
 
 ## Introduction
 
-The rising demand for hard kubernetes multitenancy, either for customers of a SaaS offering or to support disparate internal teams within an organization, coupled with mass adoption of service-meshes (Istio being the more popular of the choices), we are starting to notice a need for supporting multiple meshes within a single Kubernetes cluster. Additionally as more independant software vendors (ISVs), like us at [Affirmed Network](https://www.affirmednetworks.com/), are moving away from delivering standalone applications, and towards a model of delivering, autonomous applications with their own, strongly coupled, management infrastructure (using upstream open source PaaS components for security, observability, recovery, etc.), there is an increasing need to support disparate service-meshes that do not step over the customer's own mesh or the other vendors' meshes.
+With is a rising demand for supporting **hard** multitenancy in Kubernetes, for individual customers of a SaaS offering or teams within an organization, concurrently working on different services. This demand coupled with the mass adoption of service-meshes (with Istio being the more popular of the choices), we are starting to see a need to support multiple meshes within a single Kubernetes cluster. Additionally, as more independent software vendors (ISVs) like us at [Affirmed Network](https://www.affirmednetworks.com/), move away from delivering standalone applications towards a model of delivering autonomous applications with a dedicated operational and observable infrastructure (like Certmanager, Hashicorp Vault, Prometheus & Grafana, and the EL[F]K stack), there is an ever-increasing need to support disparate service-meshes within a cluster, either the ones operated by the cluster administrator or delivered as a solution by the software vendors, without stepping on each other's managed services.
 
-Current releases of Istio, albeit provide excellent support for deploying meshes across multiple clusters, do not provide a clear solution for the inverse scenario, wherein multiple meshes can operate simultaneous, in isolation, within a single Kubernetes cluster.
+Current releases of Istio, provide excellent documented support for deploying meshes that span across multiple clusters but fail to provide a clear solution for the inverse scenario, where multiple meshes can operate simultaneously, in isolation, in a single cluster.
 
-In this tutorial, I will attempt to provide step-by-step instructions to deploy and operate multiple Istio controlplanes (or meshes) running concurrently in a single Kubernetes cluster.
+---
 
-After multiple passes of modifying the istio manifest (I think) I have finally found a solution which requires no forks or code changes and can entirely be acheived with some modifications made to the deployment manifest. The solution allows admininistrators to operator disparate Istio controlplanes and have the injected istio sidecars associate, and communicate with and only with their own respective controlplanes.
+In this tutorial, I will attempt to provide step-by-step instructions to deploy and operate multiple Istio control planes (or meshes) running concurrently in a single Kubernetes cluster.
 
-### A note on Automatic Sidecar Injection
+After mucking with Istio manifests I eventually arrived at a simple solution that requires no source code changes and can entirely be achieved with deployment manifest changes. The solution enables administrators to operator disparate Istio control planes and have their (injected) `istio-proxy` sidecars associate and communicate with their respective control planes.
 
-[__Automatic Sidecar Injection__](https://istio.io/docs/ops/configuration/mesh/injection-concepts/) in Istio leverages [`MutatingWebhookConfigurations`](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/) to inject the [`istio-proxy`](https://github.com/istio/proxy) and `istio-init` containers into the selected workloads. By default, istio requires `istio-injection: enabled` label to be applied to namespaces (to select all pods in a namespace) or individual deployments/pods to allow automatic sidecar injection.
+### Note on Automatic Sidecar Injection
 
-To allow each mesh to inject it's own sidecar automatically, into workloads associated with that mesh, we will modify the Mutating Webhook Controller to watch for unique labels instead of the aforementioned, default labelSelector.
+[__Automatic Sidecar Injection__](https://istio.io/docs/ops/configuration/mesh/injection-concepts/) in Istio leverages [`MutatingWebhookConfigurations`](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/) to inject the [`istio-proxy`](https://github.com/istio/proxy) sidecar container and the `istio-init` init-container (unless you are using the CNI option) into the selected workload pods. By default, istio requires `istio-injection: enabled` label to be applied to namespaces (when selecting all pods in a namespace) or to specific `deployments` or individual `pods` to enable automatic sidecar injection.
+
+To allow each mesh to inject its sidecar automatically, into the target workload and have them associated with that mesh, we will be modifying the `MutatingWebhookConfiguration` to watch for (non-default) unique/combo labels.
 
 ## Instructions
 
@@ -22,11 +24,11 @@ To allow each mesh to inject it's own sidecar automatically, into workloads asso
 
 #### Cluster Scoped Resource
 
-Cluster scoped resources can and will lead to collisions with other Istio deployments if the default names from the upstream helm charts are utilized. To prevent this from happening we will need to give the [`ClusterRole`](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole), [`ClusterRoleBindings`](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#rolebinding-and-clusterrolebinding) and [`MutatingWebhookConfiguration`]((https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)) and [`ValidatingWebhookConfiguration`]((https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)) resources unique names.
+Cluster scoped resources, from Istio manifests, can lead to name collisions if the default names from the upstream helm charts are used. To prevent this from occurring we will need to give each of the [`ClusterRole`](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-and-clusterrole), [`ClusterRoleBindings`](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#rolebinding-and-clusterrolebinding) and [`MutatingWebhookConfiguration`]((https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)) & [`ValidatingWebhookConfiguration`]((https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)) resources unique names.
 
 ##### ClusterRoles & ClusterRoleBindings
 
-Renaming these `ClusterRole` and `ClusterRoleBinding` is entirely optional since they can be used across namespaces. The changes are required if other vendors have modified the clean upstream resource definitions to apply more stringent [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) policies.
+Renaming these `ClusterRole` and `ClusterRoleBinding` is entirely optional since they can be re-used across namespaces if needed. The changes are required if other vendors modify these resource definitions to apply more stringent [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) policies.
 
 ```diff
 ClusterRole and ClusterRoleBindings
@@ -104,9 +106,9 @@ ClusterRole and ClusterRoleBindings
 
 ##### Mutating/Validation Webhook Configurations
 
-**IMPORTANT: It is absolutely essential to ensure that the resources shown below are always uniquely identifiable for each control plane deployment.**
+**IMPORTANT: It is essential to ensure that the resources shown below are uniquely identifiable for every individual control plane deployment.**
 
-- `Webhooks` (and associated `ConfigMaps`)
+- `Webhooks` (and their related `ConfigMap`)
 
 ```diff
 --- webhook_clean.yaml  2020-03-13 12:37:56.000000000 -0400
@@ -205,7 +207,7 @@ ClusterRole and ClusterRoleBindings
 
 ##### Loadbalancer/NodePort port numbers
 
-Kubernetes allocates unique ports to every `Service` that requests a NodePort. Two Services cannot use the same [`NodePort`](https://kubernetes.io/docs/concepts/services-networking/service/#nodeport) and will have the `API Server` deny the request.
+Kubernetes allocates unique ports for every `Service` that requests a NodePort. Since two `Service`s cannot use the same [`NodePort`](https://kubernetes.io/docs/concepts/services-networking/service/#nodeport) and we will need to modify the default values for each of the NodePorts associated with the `Gateway` deployments.
 
 ```diff
 ---
@@ -239,7 +241,7 @@ Kubernetes allocates unique ports to every `Service` that requests a NodePort. T
 
 ##### Deployments - Container command and arguments
 
-> CAVEAT: A significant limitation that was uncovered in this chart modification based approach is that we must know apriori the namespaces that we want to be governed by our own Istio deployment.
+> CAVEAT: A significant limitation that was uncovered during this effort was that we must statically specify the namespaces that we wish to include in our mesh. To achieve this I have added flag to the citadel container - `- --listened-namespaces=istio-affirmed,istio-affirmed-workspace,kube-system`
 
 ```diff
 --- deployment_clean.yaml   2020-03-13 13:10:34.000000000 -0400
@@ -276,8 +278,6 @@ Kubernetes allocates unique ports to every `Service` that requests a NodePort. T
 
 ### Generate, deploy and verify
 
-The steps shown below can be replicated to any number of control plane by means of substitution. Try it out with an additional control plane.
-
 #### Requirements
 
 - A Kubernetes Cluster
@@ -308,13 +308,13 @@ cd istio-1.5.0
 helm repo add istio.io https://storage.googleapis.com/istio-release/releases/1.5.0/charts/
 ```
 
-- Istio [Clean] - istio-clean.yaml
+- Istio [Clean] - [istio-clean.yaml](https://github.com/affirmednetworks/multi-mesh/blob/master/istio-clean.yaml)
 
 ```console
 helm template install/kubernetes/helm/istio --name istio --namespace istio-affirmed --values install/kubernetes/helm/istio/values-istio-demo.yaml > istio-clean.yaml
 ```
 
-- Istio [Modified] - istio-affirmed.yaml
+- Istio [Modified] - [istio-affirmed.yaml](https://github.com/affirmednetworks/multi-mesh/blob/master/istio-affirmed.yaml)
 
 ```console
 # Apply the patch file to the clean istio yaml and also backup the original
@@ -371,7 +371,7 @@ NAME                                READY   STATUS    RESTARTS   AGE
 nginx-deployment-54f57cf6bf-h9n9t   2/2     Running   0          10s
 ```
 
-- Ensure that the istio-proxy sidecar is deployed and that it is pointed to the istio-affirmed control-plane
+- Ensure that the `istio-proxy` sidecar is up and running and is configured to use the right (__istio-affirmed__) control plane services.
 
 ```console
 kubectl describe pod nginx-deployment-54f57cf6bf-h9n9t
@@ -409,23 +409,16 @@ Containers:
 
 ### Owned/managed namespaces must be specified in advance
 
-Citadel is responsible for watching `ServiceAccount` `Secrets` generated by the `API server` as new `ServiceAccount` are created. In return citadel's [`secretcontroller`](https://github.com/istio/istio/blob/1.5.0/security/pkg/k8s/controller/workloadsecret.go) generates new `Secrets` of type `istio.io/key-and-cert` with the `cert-chain.pem`, `key.pem` and `root-ca.pem`. This `Secret` is then used by the `mutating webhook` to authenticate itself with the `API server`. SecretController leverages [`spiffe`](https://spiffe.io/) to generate identities of the services and embeds the `spiffe` URI in the certificate resource mounted by the sidecar injector pod.
+Citadel is responsible for watching `ServiceAccount` `Secrets` generated by the `API server` as new `ServiceAccount` are created. In return citadel's [`secretcontroller`](https://github.com/istio/istio/blob/1.5.0/security/pkg/k8s/controller/workloadsecret.go) generates new `Secrets` of type `istio.io/key-and-cert` with the `cert-chain.pem`, `key.pem` and `root-cert.pem`. This `Secret` is then used by the `mutating webhook` to authenticate itself with the `API server`. `secretcontroller` leverages [`spiffe`](https://spiffe.io/) to generate a unique identity for every `Service` in the mesh, which is embedded in the `x509` URI of the `cert-chain.pem` file mounted in the `istio-sidecar-injection` pod.
 
-By default, [`citadel`](https://istio.io/docs/ops/deployment/architecture/#citadel) watches these `ServiceAccounts` and `Secrets` across all namespaces in the Cluster. However this causes contention in a multi control-plane scenario as one citadel instance from Mesh-A might step-on and modify a Mesh-B secret, leading to Identity errors during `x509` authentication.
+By default, [`citadel`](https://istio.io/docs/ops/deployment/architecture/#citadel) watches `ServiceAccounts` and `Secrets` across all namespaces in the Cluster. However, this may cause contention in a multi control-plane cluster, as one citadel instance from one mesh might step-on, and modify, another mesh's `Secret` and embed an incorrect `spiffe` URI, leading to errors during the certificate authentication between the API Server and the MutatingWebhook endpoint.
 
-The `citadel` binary provides flags to override the default and allows us to specify one or more namespaces that citadel's secretcontroller must watch for events. This, however, is entirely static in nature and requires the administrator to know what namespaces will be part of the service-mesh apriori.
+`citadel` container takes in command-line arguments that can be used to configure a list of namespaces to be watched by citadel's `secretcontroller`, for events. This, however, is entirely static and requires the administrator to know what namespaces will be part of the service-mesh apriori.
 
-Unfortunately, at this point, there is no support to dynamically specify the namespaces or provide regex-based watchers.
+Unfortunately, at this point, there is neither any support for dynamically configuring namespaces to be watched by `citadel` nor a way to provide regex-based command line args to `citadel`.
 
-### Istio configuration resources are applied to all istio mesh sidecars
-
-As of istio-1.5.0 there is no support to tag Istio configuration resources, like VirtualServices, Gateways, DestinationRules, etc. to a unique Istio control plane (this might change with the introduction of tagging in the upcoming istio-1.6.0 release).
-
-Due to this fact all disparate mesh sidecars will recieve envoy `xDS` updates for all services and resources in the entire namespace. However, there is a way to limit the number of configurations a sidecar receives using Istio Sidecar resource (or Envoy Filter). All namespaces owned by a single mesh must deploy this additional resource to their namespaces to avoid syncing with the other control-planes.
-Notice, below, the addition parameter `--listened-namespaces` passed to the `citadel` container
 
 ```diff
-
 # Source: istio/charts/security/templates/deployment.yaml
 
 @@ -177,6 +178,7 @@
@@ -437,3 +430,15 @@ Notice, below, the addition parameter `--listened-namespaces` passed to the `cit
              - name: CITADEL_ENABLE_NAMESPACES_BY_DEFAULT
                value: "true"
 ```
+
+### Istio configuration resources are applied to all istio mesh sidecars
+
+As of istio-1.5.0 there is no support to tag and associated Istio configuration resources, like `VirtualServices`, `Gateways`, `DestinationRules`, etc. to a specific Istio control plane (however, this might change with the introduction of label/annotation-based tagging in the upcoming istio-1.6.0 release).
+
+As a result of this flaw, `istio-proxy` sidecars across multiple meshes will receive envoy `xDS` updates for all deployed `Service`s and Istio configuration resources from every namespace they are deployed to. However, there is a way to limit the amount of configurations a sidecar receives using Istio's [`Sidecar`](https://istio.io/docs/reference/config/networking/sidecar/) resource. All namespaces owned by a single mesh must deploy this additional resource to each of their namespaces to avoid syncing with the other control-planes.
+
+## Closing Remarks
+
+All files shown in the article are available to view and download at [affirmednetworks/multi-mesh](https://github.com/affirmednetworks/multi-mesh).
+
+To learn more about Affirmed Networks' UnityCloud solution for the 5G core click [here](https://www.affirmednetworks.com/resources-draft/solution-brief-affirmed-unitycloud/)
